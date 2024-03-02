@@ -189,6 +189,8 @@ void HTTPServer::newConnection(int client_socked)
     // }
     //---------------
 
+    
+
     std::cout << "client_socked: " << client_socked << "\nsend all bytes: " << (sendResponce(client_socked, std::move(header) + std::move(body)) ? "true" : "false") << "\n------\n";
     close(client_socked);
 }
