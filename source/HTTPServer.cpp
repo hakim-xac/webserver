@@ -6,7 +6,7 @@
 HTTPServer::HTTPServer(HTTPServer::Port port, HTTPServer::ip_address_t ip_address, HTTPServer::MaxCountConnect max_count_connect) noexcept
     : _port { port.port }
     , _max_count_connect { max_count_connect.max_count_connect }
-    , _start_access { }
+    , _start_access { false }
     , _ip_address { std::move(ip_address) }
     , _server_socket { }
 {
@@ -42,14 +42,14 @@ void HTTPServer::connectionLoop() noexcept
     {
         if(_start_access == false)
             return;
-        sockaddr_in client_addr;
+        sockaddr_in client_addr{};
         uint32_t client_addr_size{};
         
-        int result_accept { accept(_server_socket.getDescription(), std::bit_cast<sockaddr*>(&client_addr), &client_addr_size) };
-        if(result_accept == -1)
+        int client_socket { accept(_server_socket.getDescription(), std::bit_cast<sockaddr*>(&client_addr), &client_addr_size) };
+        if(client_socket == -1)
             continue;
         
-        std::thread { [&]{ newConnection(result_accept); } }.detach();
+        std::thread { [&]{ newConnection(client_socket, std::move(client_addr)); } }.detach();
 
     }
 }
@@ -85,7 +85,7 @@ HTTPServer::Bind() noexcept
 bool 
 HTTPServer::Listen() noexcept
 {
-    if(listen(_server_socket.getDescription(), _max_count_connect) == -1 ) [[unlikely]]
+    if(listen(_server_socket.getDescription(), static_cast<int>(_max_count_connect)) == -1 ) [[unlikely]]
     {
         std::cerr << "listen(...) == INVALID_SOCKET\n";
         return false;
@@ -135,10 +135,12 @@ HTTPServer::resetSocket() const noexcept
 
 //-------------------------------------------------
 
-void HTTPServer::newConnection(int client_socked)
+void HTTPServer::newConnection(int client_socket, sockaddr_in&& addr_in)
 {
-    // TODO add raii for client socket
-    std::optional<std::string> request_opt { getRequest(client_socked) };
+    
+    ClientSocketScoped client { client_socket, std::move(addr_in) };
+
+    std::optional<std::string> request_opt { getRequest(client_socket) };
     if(request_opt.has_value() == false)
     {
         std::cerr << "request_opt.has_value() == false" << "\n";
@@ -191,8 +193,8 @@ void HTTPServer::newConnection(int client_socked)
 
     
 
-    std::cout << "client_socked: " << client_socked << "\nsend all bytes: " << (sendResponce(client_socked, std::move(header) + std::move(body)) ? "true" : "false") << "\n------\n";
-    close(client_socked);
+    std::cout << "client_socket: " << client_socket << "\n"
+    "send all bytes: " << (sendResponce(client_socket, std::move(header) + std::move(body)) ? "true" : "false") << "\n------\n";
 }
 
 //-------------------------------------------------
@@ -207,17 +209,19 @@ HTTPServer::getRequest(int socket_id)
     ssize_t bytes_read{};
     std::string result_str{};  
 
-    do
+    for(bytes_read = recv(socket_id, buffer.data(), buffer.size(), 0);
+        bytes_read == BUFFER_SIZE;
+        bytes_read = recv(socket_id, buffer.data(), buffer.size(), 0) )
     {
-        bytes_read = recv(socket_id, buffer.data(), buffer.size(), 0);
-        if(bytes_read == 0)
-            return {};
 
         std::string tmp;
         std::move(std::begin(buffer), std::end(buffer), std::back_inserter(tmp));
         result_str += tmp;
+    }
 
-    } while(bytes_read == BUFFER_SIZE);
+    std::string tmp;
+    std::move(std::begin(buffer), std::end(buffer), std::back_inserter(tmp));
+    result_str += tmp;
 
     return result_str;
 }

@@ -3,6 +3,7 @@
 #include "../common.h"
 #include "../include/Utils.h"
 #include "ServerSocketScoped.h"
+#include "ClientSocketScoped.h"
 
 class HTTPServer final {
     
@@ -25,7 +26,8 @@ class HTTPServer final {
 
     //-------------------------------------------------
     
-    HTTPServer(Port port, ip_address_t ip_address, MaxCountConnect max_count_connect) noexcept;
+    explicit HTTPServer(Port port, ip_address_t ip_address, MaxCountConnect max_count_connect) noexcept;
+    HTTPServer() = delete;
 
     ~HTTPServer() noexcept;
 
@@ -62,7 +64,7 @@ class HTTPServer final {
     bool
     resetSocket() const noexcept;
 
-    void newConnection(int client_socked);
+    void newConnection(int client_socket, sockaddr_in&& addr_in);
 
     [[nodiscard]]
     std::optional<std::string>

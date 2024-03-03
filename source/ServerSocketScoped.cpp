@@ -17,19 +17,20 @@ ServerSocketScoped::~ServerSocketScoped() noexcept
 //-------------------------------------------------
 
 ServerSocketScoped::ServerSocketScoped(ServerSocketScoped&& other) noexcept
+    : _socket_id { -1 }
 {
-    if(&other == this)
+    if(this == std::addressof(other))
         return;
 
-    std::swap(other._socket_id, _socket_id);
+    swap(std::move(other));
 }
 
 //-------------------------------------------------
 
-ServerSocketScoped& ServerSocketScoped::operator == (ServerSocketScoped&& other) noexcept
+ServerSocketScoped& ServerSocketScoped::operator = (ServerSocketScoped&& other) noexcept
 {
-    if(&other != this)
-        std::swap(other._socket_id, _socket_id);
+    if(this != std::addressof(other))
+        swap(std::move(other));
 
     return *this;
 };
@@ -54,6 +55,13 @@ void ServerSocketScoped::disconnect() noexcept
         close(_socket_id);
         _socket_id = -1;
     }
+}
+
+//-------------------------------------------------
+
+void ServerSocketScoped::swap(ServerSocketScoped&& other) noexcept
+{
+    std::swap(_socket_id, other._socket_id);
 }
 
 //-------------------------------------------------

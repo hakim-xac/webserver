@@ -7,19 +7,21 @@ class ServerSocketScoped final {
 
     ~ServerSocketScoped() noexcept;
 
-    explicit ServerSocketScoped(const ServerSocketScoped&) = delete;
+    ServerSocketScoped(const ServerSocketScoped&) = delete;
 
-    explicit ServerSocketScoped(ServerSocketScoped&& other) noexcept;
+    ServerSocketScoped(ServerSocketScoped&& other) noexcept;
 
-    ServerSocketScoped& operator == (const ServerSocketScoped&) = delete;
+    ServerSocketScoped& operator = (const ServerSocketScoped&) = delete;
 
-    ServerSocketScoped& operator == (ServerSocketScoped&& other) noexcept;
+    ServerSocketScoped& operator = (ServerSocketScoped&& other) noexcept;
 
     [[nodiscard]]
     int
     getDescription() const noexcept;
 
     void disconnect() noexcept;
+
+    void swap(ServerSocketScoped&& other) noexcept;
 
     private:
     
