@@ -25,5 +25,5 @@ class ServerSocketScoped final {
 
     private:
     
-    int _socket_id;
+    int _socket_id { -1 };
 };

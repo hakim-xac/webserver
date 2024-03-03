@@ -61,7 +61,8 @@ void ServerSocketScoped::disconnect() noexcept
 
 void ServerSocketScoped::swap(ServerSocketScoped&& other) noexcept
 {
-    std::swap(_socket_id, other._socket_id);
+    ServerSocketScoped&& tmp { std::move(other) };
+    std::swap(_socket_id, tmp._socket_id);
 }
 
 //-------------------------------------------------

@@ -9,15 +9,19 @@ HTTPServer::HTTPServer(HTTPServer::Port port, HTTPServer::ip_address_t ip_addres
     , _start_access { false }
     , _ip_address { std::move(ip_address) }
     , _server_socket { }
+    , _end_points { }
 {
-    std::cout << "Server started...\n";
+    std::cout << "Server started..." << std::endl;
+    std::cout << "Server socked id: " << _server_socket.getDescription() << "" << std::endl;
+    std::cout << "Server _port: " << _port << "" << std::endl;
+    std::cout << "Server _max_count_connect: " << _max_count_connect << "" << std::endl;
 }
 
 //-------------------------------------------------
 
 HTTPServer::~HTTPServer() noexcept
 {
-    std::cout << "Server closed...\n";
+    std::cout << "Server closed..." << std::endl;
 }
 
 
@@ -29,7 +33,7 @@ HTTPServer::start () noexcept
 {
     _start_access = resetSocket() and Bind() and Listen();
 
-    std::cout << "Server status: " << (_start_access ? "RUN" : "NOT RUN") << "\n";
+    std::cout << "Server status: " << (_start_access ? "RUN" : "NOT RUN") << "" << std::endl;
 
     return _start_access;
 }
@@ -60,11 +64,13 @@ void HTTPServer::connectionLoop() noexcept
 bool 
 HTTPServer::Bind() noexcept
 {
+    std::cerr << "HTTPServer::Bind" << std::endl;
+
     std::optional<sockaddr_in> server_addr_op { generateSockAddrIN() };
 
     if(server_addr_op.has_value() == false)
     {
-        std::cerr << "server_addr_op.has_value() == false\n";
+        std::cerr << "server_addr_op.has_value() == false" << std::endl;
         return false;
     }
 
@@ -72,7 +78,7 @@ HTTPServer::Bind() noexcept
 
     if(bind(_server_socket.getDescription(), std::bit_cast<sockaddr*>(&server_addr), sizeof server_addr) == -1) [[unlikely]]
     {
-        std::cerr << "bind(...) == INVALID_SOCKET\n";
+        std::cerr << "bind(...) == INVALID_SOCKET" << std::endl;
         return false;
     }
 
@@ -85,9 +91,11 @@ HTTPServer::Bind() noexcept
 bool 
 HTTPServer::Listen() noexcept
 {
+    std::cerr << "HTTPServer::Listen" << std::endl;
+
     if(listen(_server_socket.getDescription(), static_cast<int>(_max_count_connect)) == -1 ) [[unlikely]]
     {
-        std::cerr << "listen(...) == INVALID_SOCKET\n";
+        std::cerr << "listen(...) == INVALID_SOCKET" << std::endl;
         return false;
     }
     return true;
@@ -99,14 +107,16 @@ HTTPServer::Listen() noexcept
 uint32_t
 HTTPServer::getRealIP(ip_address_t ip) noexcept
 {
+    std::cerr << "HTTPServer::getRealIP" << std::endl;
+
     if(std::string * str { std::get_if<std::string>(&ip) })
     {
-        std::cout << "ip str:" << *str << "\n";
+        std::cerr << "ip str:" << *str << "" << std::endl;
         return INADDR_ANY;
     }
     else
     {
-        std::cout << "ip any type:" << INADDR_ANY << "\n";
+        std::cerr << "ip any type:" << INADDR_ANY << "" << std::endl;
         return INADDR_ANY;
     }
 }
@@ -117,16 +127,18 @@ HTTPServer::getRealIP(ip_address_t ip) noexcept
 bool
 HTTPServer::resetSocket() const noexcept
 {
+    std::cerr << "HTTPServer::resetSocket" << std::endl;
+
     if(_server_socket.getDescription() == -1) [[unlikely]]
     {
-        std::cerr << "_server_socket.getDescription() == -1\n";
+        std::cerr << "_server_socket.getDescription() == -1" << std::endl;
         return false;
     }
 
     int opt = 1;
     if (setsockopt(_server_socket.getDescription(), SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) [[unlikely]]
     {
-        std::cerr << "setsockopt\n";
+        std::cerr << "setsockopt" << std::endl;
         return false;
     }
 
@@ -135,23 +147,25 @@ HTTPServer::resetSocket() const noexcept
 
 //-------------------------------------------------
 
-void HTTPServer::newConnection(int client_socket, sockaddr_in&& addr_in)
+void HTTPServer::newConnection(int client_socket_scoped, sockaddr_in&& addr_in)
 {
+    std::cerr << "-------------------------------" << std::endl;
+    std::cerr << "HTTPServer::newConnection start" << std::endl;
+    std::cerr << "-------------------------------" << std::endl;
     
-    ClientSocketScoped client { client_socket, std::move(addr_in) };
+    ClientSocketScoped client { client_socket_scoped, std::move(addr_in) };
+
+    int client_socket { client.getDescription() };
 
     std::optional<std::string> request_opt { getRequest(client_socket) };
     if(request_opt.has_value() == false)
     {
-        std::cerr << "request_opt.has_value() == false" << "\n";
+        std::cerr << "request_opt.has_value() == false" << std::endl;
         return;
     }
 
-    if(request_opt.value().empty())
-    {
-        std::cerr << "request_opt.value().empty()" << "\n";
+    if(request_opt.value().size() == 0)
         return;
-    }
 
     const std::string request { *std::move(request_opt) };
 
@@ -163,15 +177,23 @@ void HTTPServer::newConnection(int client_socket, sockaddr_in&& addr_in)
     std::optional<std::string> endpoint_opt { getEndPoint(metainfo) };
     if(endpoint_opt.has_value() == false)
     {
-        body = "<html><header><title>404</title></header><body><h1>404</h1> <a href =\"/\">go to home</a></body></html>";
-        header = "HTTP/1.1 404 OK\nContent-Length: "+std::to_string(body.size()) + "\n\n";
+        body = getErrorPageFromEndPoint(500);
+
+        // if(body_endpoint_opt.has_value() == false)
+        //     body = "<html><header><title>500</title></header><body><h1>500</h1> <a href =\"/\">go to home</a></body></html>";
+        // else
+        //     body = *std::move(body_endpoint_opt);
+        // TODO save log
+        header = "HTTP/1.1 500 OK\nContent-Length: "+std::to_string(body.size()) + "\n\n";
     }
     else
     {
+        std::cerr << "client_socket id: " << client_socket << "" << std::endl;
+
         std::optional<std::string> body_endpoint_opt { getPageFromEndPoint(*std::move(endpoint_opt)) };
         if(body_endpoint_opt.has_value() == false)
         {
-            body = "<html><header><title>404</title></header><body><h1>404</h1> <a href =\"/\">go to home</a></body></html>";
+            body = getErrorPageFromEndPoint(404);
             header = "HTTP/1.1 404 OK\nContent-Length: "+std::to_string(body.size()) + "\n\n";
         }
         else
@@ -181,20 +203,25 @@ void HTTPServer::newConnection(int client_socket, sockaddr_in&& addr_in)
         }
     }
 
-    // std::cerr << "metainfo: " << "\n";
+    // std::cerr << "metainfo: " << "" << std::endl;
 
     // for(auto&& [key, value] : metainfo)
     // {
-    //     std::cerr << "key: " << std::quoted(key) << "\n";
-    //     std::cerr << "value: " << value << "\n";
-    //     std::cerr << "-------\n";
+    //     std::cerr << "key: " << std::quoted(key) << "" << std::endl;
+    //     std::cerr << "value: " << value << "" << std::endl;
+    //     std::cerr << "-------" << std::endl;
     // }
     //---------------
 
     
 
     std::cout << "client_socket: " << client_socket << "\n"
-    "send all bytes: " << (sendResponce(client_socket, std::move(header) + std::move(body)) ? "true" : "false") << "\n------\n";
+              << "send all bytes: " << (sendResponce(client_socket, std::move(header) + std::move(body)) ? "true" : "false") << "\n------" << std::endl;
+
+
+    std::cerr << "-----------------------------" << std::endl;
+    std::cerr << "HTTPServer::newConnection end" << std::endl;
+    std::cerr << "-----------------------------" << std::endl;
 }
 
 //-------------------------------------------------
@@ -219,9 +246,9 @@ HTTPServer::getRequest(int socket_id)
         result_str += tmp;
     }
 
-    std::string tmp;
-    std::move(std::begin(buffer), std::end(buffer), std::back_inserter(tmp));
-    result_str += tmp;
+    // std::string tmp;
+    // std::move(std::begin(buffer), std::end(buffer), std::back_inserter(tmp));
+    // result_str += tmp;
 
     return result_str;
 }
@@ -245,6 +272,7 @@ HTTPServer::sendResponce(int socket_id, std::string responce)
 std::optional<sockaddr_in>
 HTTPServer::generateSockAddrIN()
 {
+    std::cerr << "HTTPServer::generateSockAddrIN" << std::endl;
     sockaddr_in server_addr {};
 
     server_addr.sin_family = AF_INET;
@@ -252,16 +280,16 @@ HTTPServer::generateSockAddrIN()
 
     if(std::get_if<IPADDR_ANY>(&_ip_address))
     {
-        std::cout << "ip any\n";
+        std::cout << "ip any" << std::endl;
         server_addr.sin_addr.s_addr = INADDR_ANY;
         return server_addr;
     }
     else if(std::string* ip_addr_ptr = std::get_if<std::string>(&_ip_address))
     {
-        std::cout << "ip str\n";
+        std::cout << "ip str" << std::endl;
         if(inet_aton((*ip_addr_ptr).c_str(), &server_addr.sin_addr) == 0)
         {
-            std::cerr << "inet_aton(...) == 0\n";
+            std::cerr << "inet_aton(...) == 0" << std::endl;
             return std::nullopt;
         }
 
@@ -269,7 +297,7 @@ HTTPServer::generateSockAddrIN()
     }
     else
     {
-        std::cout << "ip any default\n";
+        std::cout << "ip any default" << std::endl;
         server_addr.sin_addr.s_addr = INADDR_ANY;
         return server_addr;
     }
@@ -281,11 +309,24 @@ HTTPServer::generateSockAddrIN()
 std::unordered_map<std::string, std::string>
 HTTPServer::parseRequest(std::string_view request)  const
 {
+    std::cerr << "HTTPServer::parseRequest" << std::endl;
+    request = Utils::trim(request);
     std::vector<std::string_view> request_as_lines { Utils::parseString(request, "\n") };
 
     if(request_as_lines.size() < 3)
     {
-        std::cerr << "request_as_lines.size() < 3\n";
+        std::cerr << "request_as_lines.size() < 3" << std::endl;
+        std::cerr << "request: '" << request << "'" << std::endl;
+        std::cerr << "request.size(): '" << request.size() << "'" << std::endl;
+
+        std::cerr << "---" << std::endl;
+        for(size_t i{}; char c : request)
+        {
+            std::cerr << static_cast<int>(c) << ( ++i % 8 == 0 ? "\n" : " ");
+            std::cerr.flush();
+        }
+        std::cerr << "---" << std::endl;
+
         return {};
     }
 
@@ -358,13 +399,60 @@ HTTPServer::getMetaInfo(const std::unordered_map<std::string, std::string>& meta
 std::optional<std::string>
 HTTPServer::getPageFromEndPoint(std::string end_point) const
 {
-    if(end_point == "/" || end_point == "/index")
-        return "<html><header><title>my page</title></header><body><h1>header</h1> <ul>"
-        "<li><a href =\"/\">go to home</a>"
-        "<li><a href =\"/exit\">go to exit</a>"
-        "</ul></body></html>";
-    else
+    auto fn { _end_points.find(std::move(end_point)) };
+    if(fn == std::end(_end_points))
         return std::nullopt;
+    
+    std::optional<std::string> body_opt { readFile("./www/" + fn->second) };
+
+    if(body_opt.has_value() == false)
+        return std::nullopt;
+
+    return *std::move(body_opt);
+}
+
+//-------------------------------------------------
+
+void HTTPServer::addEndPoint(std::string end_point, std::string filename)
+{
+    _end_points.insert(std::pair(std::move(end_point), std::move(filename)));
+}
+
+//-------------------------------------------------
+
+[[nodiscard]]
+std::optional<std::string>
+HTTPServer::readFile(std::filesystem::path path) const
+{
+    std::ifstream fs { path, std::ios::binary };
+    if(fs.is_open() == false)
+        return std::nullopt;
+    
+    const auto sz { std::filesystem::file_size(path) };
+
+    if(sz == 0)
+        return std::nullopt;
+    
+    std::string result(sz, '\0');
+    fs.read(result.data(), static_cast<long>(sz));
+
+    return result;
+}
+
+//-------------------------------------------------
+
+[[nodiscard]]
+std::string
+HTTPServer::getErrorPageFromEndPoint(int32_t error_code) const
+{
+    std::string error_code_as_str { std::to_string(error_code) };
+    std::string error_file { "./www/errors/" + error_code_as_str + ".html" };
+    std::optional<std::string> body_opt { readFile(error_file) };
+
+    if(body_opt.has_value() == false)
+       return "<html><header><title>" + error_code_as_str + "</title></header><body><h1>" + error_code_as_str + "</h1> <a href =\"/\">go to home</a></body></html>";
+    
+    return *std::move(body_opt);
 }
 
 //-------------------------------------------------

@@ -35,6 +35,8 @@ class HTTPServer final {
     bool
     start () noexcept;
 
+    void addEndPoint(std::string end_point, std::string filename);
+
     void connectionLoop() noexcept;
 
 //------------------------------------------//
@@ -64,7 +66,7 @@ class HTTPServer final {
     bool
     resetSocket() const noexcept;
 
-    void newConnection(int client_socket, sockaddr_in&& addr_in);
+    void newConnection(int client_socket_scoped, sockaddr_in&& addr_in);
 
     [[nodiscard]]
     std::optional<std::string>
@@ -99,6 +101,14 @@ class HTTPServer final {
     std::optional<std::string>
     getPageFromEndPoint(std::string end_point) const;
 
+    [[nodiscard]]
+    std::optional<std::string>
+    readFile(std::filesystem::path path) const;
+
+    [[nodiscard]]
+    std::string
+    getErrorPageFromEndPoint(int32_t error_code) const;
+
     //------------------------
 
     size_t _port;
@@ -106,6 +116,7 @@ class HTTPServer final {
     bool _start_access;
     ip_address_t _ip_address;
     ServerSocketScoped _server_socket;
+    std::map<std::string, std::string> _end_points;
 };
 
 
